@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Produce deterministic BTC price forecasts for make.fun case files."""
+"""Produce deterministic BTC price forecasts for make.fun case files.
+
+For each case, the model takes the least-squares OLS slope over the last 600
+closes. It projects that slope 240 minutes forward and clips the drift to
+[-300, +300] dollars. It also computes an EMA with span 480 over the entire
+price window, seeded by the first close, then applies a pull of
+0.30 * (EMA - last). The forecast is the last close plus the clipped drift
+and pull, rounded to five decimal places and clamped inside the valid range.
+"""
 
 from __future__ import annotations
 
@@ -73,7 +81,9 @@ def ema(prices: list[float]) -> float:
 
 def forecast(prices: list[float]) -> float:
     last = prices[-1]
+    # Project the 600-close OLS slope by 240 minutes, clipping the dollar drift.
     drift = max(-DRIFT_LIMIT, min(DRIFT_LIMIT, ols_slope(prices) * HORIZON_MINUTES))
+    # Pull 30% of the gap between the all-window EMA and the latest close.
     pull = 0.30 * (ema(prices) - last)
     # Clamp after rounding to keep the serialized value strictly inside bounds.
     raw_prediction = last + drift + pull
